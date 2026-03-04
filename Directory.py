@@ -1,7 +1,9 @@
 import os
 import re
+import sys
 
 IGNORE_FILE = ".directorypyignore"
+
 
 def _pattern_to_regex(pattern):
     """Convert a single gitignore-style pattern into a compiled regex."""
@@ -152,7 +154,14 @@ def list_directory_structure(root_dir, root, rules, indent_level=0, max_depth=fl
 
 
 def main():
-    current_directory = os.getcwd()
+    # Use the path passed as an argument, or fall back to the script's own directory
+    if len(sys.argv) > 1:
+        current_directory = os.path.abspath(sys.argv[1])
+        if not os.path.isdir(current_directory):
+            print(f"Error: '{sys.argv[1]}' is not a valid directory.")
+            sys.exit(1)
+    else:
+        current_directory = os.path.dirname(os.path.abspath(__file__))
 
     # Load ignore rules from .directorypyignore if it exists
     rules = load_ignore_patterns(current_directory)
