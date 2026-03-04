@@ -1,8 +1,10 @@
 import os
 import re
 import sys
+import argparse
 
 IGNORE_FILE = ".directorypyignore"
+DEFAULT_EXPORT_FILENAME = "dirpy_structure.txt"
 
 
 def _pattern_to_regex(pattern):
@@ -55,10 +57,8 @@ def _pattern_to_regex(pattern):
         i += 1
 
     if anchored:
-        # Must match from the start of the relative path
         return re.compile('^' + result + '(/.*)?$')
     else:
-        # Can match at any depth
         return re.compile('(^|/)' + result + '(/.*)?$')
 
 
@@ -100,7 +100,6 @@ def load_ignore_patterns(root_dir):
                 regex = _pattern_to_regex(pattern)
                 rules.append((regex, negated, dir_only))
             except re.error:
-                # If a pattern is malformed, skip it silently
                 continue
 
     return rules
@@ -118,24 +117,27 @@ def is_ignored(full_path, root_dir, rules, is_dir):
     ignored = False
 
     for regex, negated, dir_only in rules:
-        # dir_only rules don't apply to files
         if dir_only and not is_dir:
             continue
         if regex.search(relative_path):
-            ignored = not negated  # negation flips the ignored state
+            ignored = not negated
 
     return ignored
 
 
-def list_directory_structure(root_dir, root, rules, indent_level=0, max_depth=float('inf'), current_depth=0):
+def list_directory_structure(root_dir, root, rules, write, indent_level=0, max_depth=float('inf'), current_depth=0):
+    """
+    Recursively list directory structure, calling write() for each line.
+    write() is either print (console) or a file-writing function, or both.
+    """
     if current_depth > max_depth:
-        print(' ' * indent_level + '|-- ...')
+        write(' ' * indent_level + '|-- ...')
         return
 
     try:
         items = os.listdir(root_dir)
     except PermissionError:
-        print(' ' * indent_level + '|-- [permission denied]')
+        write(' ' * indent_level + '|-- [permission denied]')
         return
 
     items.sort()
@@ -147,23 +149,55 @@ def list_directory_structure(root_dir, root, rules, indent_level=0, max_depth=fl
         if is_ignored(full_path, root, rules, item_is_dir):
             continue
 
-        print(' ' * indent_level + '|-- ' + item)
+        write(' ' * indent_level + '|-- ' + item)
 
         if item_is_dir:
-            list_directory_structure(full_path, root, rules, indent_level + 4, max_depth, current_depth + 1)
+            list_directory_structure(full_path, root, rules, write, indent_level + 4, max_depth, current_depth + 1)
 
 
 def main():
-    # Use the path passed as an argument, or fall back to the script's own directory
-    if len(sys.argv) > 1:
-        current_directory = os.path.abspath(sys.argv[1])
+    parser = argparse.ArgumentParser(
+        description="List a directory structure, with optional .directorypyignore support."
+    )
+    parser.add_argument(
+        "path",
+        nargs="?",
+        default=None,
+        help="Directory to scan (defaults to the script's own directory)."
+    )
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Export the structure to a text file."
+    )
+    parser.add_argument(
+        "--save-path",
+        default=None,
+        metavar="FILE",
+        help="Path for the exported text file (only used with --save). "
+             f"Defaults to {DEFAULT_EXPORT_FILENAME} in the script's directory."
+    )
+    args = parser.parse_args()
+
+    # Resolve the directory to scan
+    if args.path:
+        current_directory = os.path.abspath(args.path)
         if not os.path.isdir(current_directory):
-            print(f"Error: '{sys.argv[1]}' is not a valid directory.")
+            print(f"Error: '{args.path}' is not a valid directory.")
             sys.exit(1)
     else:
         current_directory = os.path.dirname(os.path.abspath(__file__))
 
-    # Load ignore rules from .directorypyignore if it exists
+    # Resolve export path if --save was given
+    export_path = None
+    if args.save:
+        if args.save_path:
+            export_path = os.path.abspath(args.save_path)
+        else:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            export_path = os.path.join(script_dir, DEFAULT_EXPORT_FILENAME)
+
+    # Load ignore rules
     rules = load_ignore_patterns(current_directory)
 
     if rules:
@@ -171,6 +205,7 @@ def main():
     else:
         print(f"No '{IGNORE_FILE}' found (or it's empty) — showing all files.")
 
+    # Ask for depth
     user_input = input("Enter the number of layers deep to display (0 for unlimited): ").strip()
 
     if user_input == '0':
@@ -185,10 +220,31 @@ def main():
             print("Invalid input. Please enter a valid number.")
             return
 
-    print(f"\nDirectory structure of: {current_directory}\n")
-    print(f"{current_directory}")
+    # Build the header line
+    header = f"Directory structure of: {current_directory}"
 
-    list_directory_structure(current_directory, current_directory, rules, max_depth=max_depth)
+    # Set up the write function — prints to console, and also writes to file if --save
+    if export_path:
+        export_file = open(export_path, "w", encoding="utf-8")
+
+        def write(line):
+            print(line)
+            export_file.write(line + "\n")
+    else:
+        export_file = None
+
+        def write(line):
+            print(line)
+
+    print()
+    write(header)
+    write(current_directory)
+
+    list_directory_structure(current_directory, current_directory, rules, write, max_depth=max_depth)
+
+    if export_file:
+        export_file.close()
+        print(f"\nStructure saved to: {export_path}")
 
 
 if __name__ == "__main__":

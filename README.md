@@ -10,10 +10,19 @@ No third-party libraries required.
 
 ```bash
 # Run from the script's own directory
-python list_directory.py
+python Directory.py
 
 # Run on a specific directory
-python list_directory.py /path/to/folder
+python Directory.py /path/to/folder
+
+# Export the structure to a text file (saved as dirpy_structure.txt next to the script)
+python Directory.py --save
+
+# Export to a specific file path
+python Directory.py --save --save-path /path/to/output.txt
+
+# Combine all options
+python Directory.py /path/to/folder --save --save-path ./my_structure.txt
 ```
 
 When run, it will ask how many levels deep to display:
@@ -22,9 +31,17 @@ When run, it will ask how many levels deep to display:
 Enter the number of layers deep to display (0 for unlimited):
 ```
 
+## Flags
+
+| Flag | Description |
+|---|---|
+| `path` | (Optional) Directory to scan. Defaults to the script's own directory. |
+| `--save` | Export the structure to a text file. |
+| `--save-path FILE` | Where to save the export. Only used with `--save`. Defaults to `dirpy_structure.txt` next to the script. |
+
 ## Ignoring files and folders
 
-Create a `.directorypyignore` file in the root of the directory being scanned. It works just like a `.gitignore` - one pattern per line.
+Create a `.directorypyignore` file in the root of the directory being scanned. It works just like a `.gitignore` — one pattern per line.
 
 ```
 # Ignore compiled Python files
